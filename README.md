@@ -49,8 +49,9 @@ I adminpanelet kan du:
 - **Kampstatistikk**: per kamp og lag — gule kort, røde kort, hjørnespark,
   straffespark i ordinær tid og selvmål (under «📊 Kampstatistikk»)
 - **🤖 Hent resultater med AI**: Claude (Sonnet) søker på nettet etter resultater
-  og statistikk for spilte kamper som mangler data. Alle forslag vises til
-  godkjenning — først når du godkjenner, lagres de i databasen.
+  og statistikk for spilte kamper som mangler data, og henter samtidig oppdaterte
+  **VM-vinnerodds** for deltakernes lag fra en fast kilde (Oddschecker). Alle forslag
+  vises til godkjenning — først når du godkjenner, lagres de i databasen.
   Krever en Anthropic API-nøkkel i `config.json` (`"anthropic_api_key"`) eller
   miljøvariabelen `ANTHROPIC_API_KEY`, samt `pip install anthropic` på serveren.
 
@@ -63,6 +64,11 @@ den endres i etterkant. Innloggingen varer i 8 timer.
 - Lik poengsum gir delt plassering, og neste plass hoppes over (1, 2, 3, 3, 5, 6 …).
 - Klikk på en deltaker for å se trendgraf med plassering dag for dag
   (1. plass øverst), med mulighet for å sammenligne med en annen deltaker.
+- **VM-odds-rute** til venstre for hver linje viser oddsen for at deltakerens lag
+  vinner hele VM (hentes sammen med AI-innhentingen, se under).
+- **Tema-merker** på resultatlinjen, basert på statistikk (laget som leder, minst 1):
+  🏴‍☠️ Sjørøver (flest røde kort), 🤪 Forvirret (flest selvmål),
+  😴 Sovende keeper (flest mål mot seg) og 🚀 Rakett (vunnet med størst måldifferanse).
 
 ## Poengregler (`POENG` i data.js)
 

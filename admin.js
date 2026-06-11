@@ -236,7 +236,7 @@ async function lagreAlt() {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${adminToken}`,
       },
-      body: JSON.stringify({ deltakere, resultater }),
+      body: JSON.stringify({ deltakere, resultater, odds: ODDS, oddsMeta: ODDS_META }),
     });
     if (res.status === 401) {
       adminToken = null;
@@ -261,6 +261,7 @@ document.getElementById("lagreBtn").addEventListener("click", lagreAlt);
 
 /* ---------- AI-oppdatering (Claude Sonnet med websøk) ---------- */
 let aiForslag = null;
+let aiOdds = null;
 
 function aiKandidater() {
   // Kamper som har startet (avspark + 2,5 t passert) og mangler resultat eller statistikk
@@ -297,15 +298,44 @@ function statsTekst(stats) {
   return `<span class="ai-stats">Statistikk (H/B): ${side(stats.home)} &nbsp;|&nbsp; ${side(stats.away)}</span>`;
 }
 
-function visAiForslag(forslagListe) {
+function oddsForslagHtml(oddsFunnet) {
+  if (!oddsFunnet.length) return "";
+  const kilde = oddsFunnet.find((o) => o.kilde)?.kilde || "";
+  const rader = oddsFunnet
+    .slice()
+    .sort((a, b) => a.desimal - b.desimal)
+    .map((o) => {
+      const naa = ODDS[o.lag];
+      const naaTekst = naa != null && !isNaN(Number(naa))
+        ? Number(naa).toLocaleString("nb-NO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : "–";
+      const ny = Number(o.desimal).toLocaleString("nb-NO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return `<tr><td>${flagg(o.lag)} ${o.lag}</td><td class="ao-old">${naaTekst}</td><td class="ao-arrow">→</td><td class="ao-new">${ny}</td></tr>`;
+    }).join("");
+  return `
+    <div class="ai-odds">
+      <label class="ai-row ai-odds-head">
+        <input type="checkbox" id="aiOddsGodkjenn" checked>
+        <span class="ai-info">
+          <span class="ai-kamp">🏆 Oppdater VM-vinnerodds (${oddsFunnet.length} lag)</span>
+          <span class="ai-meta">${kilde ? `Kilde: ${kilde}` : ""}</span>
+        </span>
+      </label>
+      <table class="ai-odds-tabell"><tbody>${rader}</tbody></table>
+    </div>`;
+}
+
+function visAiForslag(forslagListe, oddsListe = []) {
   const panel = document.getElementById("aiPanel");
   const funnet = forslagListe.filter((f) => f.funnet && f.resultat);
   const ikkeFunnet = forslagListe.filter((f) => !f.funnet || !f.resultat);
+  const oddsFunnet = oddsListe.filter((o) => o.funnet && o.desimal != null);
   aiForslag = funnet;
+  aiOdds = oddsFunnet;
 
-  if (!funnet.length) {
+  if (!funnet.length && !oddsFunnet.length) {
     panel.hidden = false;
-    panel.innerHTML = `<p class="d-empty">AI-en fant ingen pålitelige resultater for kampene som mangler data
+    panel.innerHTML = `<p class="d-empty">AI-en fant ingen pålitelige resultater eller odds
       (${ikkeFunnet.length} kamper undersøkt). Prøv igjen senere.</p>`;
     return;
   }
@@ -335,8 +365,9 @@ function visAiForslag(forslagListe) {
   panel.hidden = false;
   panel.innerHTML = `
     <h3 class="d-section">🤖 Forslag fra AI – velg hva som skal inn i databasen</h3>
-    ${rader}
+    ${funnet.length ? rader : `<p class="ai-meta">Ingen nye kampresultater å foreslå.</p>`}
     ${ikkeFunnet.length ? `<p class="ai-meta">${ikkeFunnet.length} kamper ble undersøkt uten at det ble funnet et pålitelig resultat.</p>` : ""}
+    ${oddsForslagHtml(oddsFunnet)}
     <div class="ai-knapper">
       <button id="aiGodkjennBtn" class="save-btn">✅ Godkjenn valgte og lagre</button>
       <button id="aiAvvisBtn" class="back-btn">Avvis alle</button>
@@ -346,6 +377,7 @@ function visAiForslag(forslagListe) {
     panel.hidden = true;
     panel.innerHTML = "";
     aiForslag = null;
+    aiOdds = null;
   });
 
   document.getElementById("aiGodkjennBtn").addEventListener("click", async () => {
@@ -365,12 +397,24 @@ function visAiForslag(forslagListe) {
       }
       if (f.stats) k.stats = f.stats;
     }
+
+    // VM-odds (oppdateres samlet hvis avkrysset)
+    const oddsBoks = document.getElementById("aiOddsGodkjenn");
+    if (oddsBoks && oddsBoks.checked && aiOdds && aiOdds.length) {
+      for (const o of aiOdds) ODDS[o.lag] = o.desimal;
+      ODDS_META = {
+        kilde: aiOdds.find((o) => o.kilde)?.kilde || ODDS_META.kilde || "",
+        oppdatert: new Date().toISOString(),
+      };
+    }
+
     byggAdmin(); // skjemaet viser de godkjente verdiene
     const ok = await lagreAlt(); // ...og databasen oppdateres fra skjemaet
     if (ok) {
       panel.hidden = true;
       panel.innerHTML = "";
       aiForslag = null;
+      aiOdds = null;
     }
   });
 }
@@ -378,8 +422,14 @@ function visAiForslag(forslagListe) {
 document.getElementById("aiBtn").addEventListener("click", async () => {
   const knapp = document.getElementById("aiBtn");
   const kandidater = aiKandidater();
-  if (!kandidater.length) {
-    visStatus("Ingen spilte kamper mangler resultat eller statistikk akkurat nå. 👍", true);
+  // Deltakernes lag – AI henter oppdaterte VM-vinnerodds for disse hver gang.
+  const lag = [...new Set(
+    [...document.querySelectorAll("#adminDeltakere .ad-deltaker")]
+      .map((rad) => rad.querySelector(".ad-lag").value)
+      .filter(Boolean)
+  )];
+  if (!kandidater.length && !lag.length) {
+    visStatus("Ingen spilte kamper mangler data, og ingen lag å hente odds for. 👍", true);
     return;
   }
   knapp.disabled = true;
@@ -391,7 +441,7 @@ document.getElementById("aiBtn").addEventListener("click", async () => {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${adminToken}`,
       },
-      body: JSON.stringify({ kamper: kandidater }),
+      body: JSON.stringify({ kamper: kandidater, lag }),
     });
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) {
@@ -404,7 +454,7 @@ document.getElementById("aiBtn").addEventListener("click", async () => {
       visStatus(data.error || "AI-forespørselen feilet.", false);
       return;
     }
-    visAiForslag(data.kamper || []);
+    visAiForslag(data.kamper || [], data.odds || []);
   } catch (err) {
     visStatus("Får ikke kontakt med serveren.", false);
   } finally {

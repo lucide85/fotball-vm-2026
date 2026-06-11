@@ -27,6 +27,11 @@ function flagg(lag, stor = false) {
   return `<img class="flag-img ${stor ? "flag-lg" : ""}" src="https://flagcdn.com/${h}/${kode}.png" alt="${lag}" loading="lazy">`;
 }
 
+// VM-vinnerodds hentes fra serveren (data.json) sammen med AI-innhentingen.
+// ODDS: lag -> desimalodds for å vinne VM. ODDS_META: { kilde, oppdatert }.
+let ODDS = {};
+let ODDS_META = {};
+
 const RUNDE_NAVN = {
   R32: "16-delsfinaler", R16: "Åttedelsfinaler", QF: "Kvartfinaler",
   SF: "Semifinaler", BRONSE: "Bronsefinale", FINALE: "Finale",
@@ -129,8 +134,60 @@ function medRangering(rader) {
   });
 }
 
+/* ---------- Statistikk-temaer på resultatlinjen ----------
+   Hvert tema tildeles deltakeren(e) hvis lag leder en statistikk (minst 1).
+   Beregnes blant lagene deltakerne faktisk følger. */
+const TEMAER = [
+  { key: "sjorover",  felt: "rode",      emoji: "🏴‍☠️", navn: "Sjørøver",       tekst: "flest røde kort" },
+  { key: "forvirret", felt: "selvmal",   emoji: "🤪",   navn: "Forvirret",      tekst: "flest selvmål" },
+  { key: "keeper",    felt: "maalMot",   emoji: "😴",   navn: "Sovende keeper", tekst: "flest mål mot seg" },
+  { key: "rakett",    felt: "maxMargin", emoji: "🚀",   navn: "Rakett",         tekst: "vunnet med størst margin" },
+];
+
+function temaAggregat() {
+  const per = {};
+  const sikre = (lag) => (per[lag] ||= { rode: 0, selvmal: 0, maalMot: 0, maxMargin: 0 });
+  const behandle = (home, away, k) => {
+    const [mh, ma] = maalScore(k);
+    sikre(home).maalMot += ma;
+    sikre(away).maalMot += mh;
+    const [h, a] = sluttScore(k);
+    if (h > a) sikre(home).maxMargin = Math.max(sikre(home).maxMargin, h - a);
+    else if (a > h) sikre(away).maxMargin = Math.max(sikre(away).maxMargin, a - h);
+    if (k.stats) {
+      if (k.stats.home) { sikre(home).rode += k.stats.home.rode || 0; sikre(home).selvmal += k.stats.home.selvmal || 0; }
+      if (k.stats.away) { sikre(away).rode += k.stats.away.rode || 0; sikre(away).selvmal += k.stats.away.selvmal || 0; }
+    }
+  };
+  for (const k of KAMPER) if (k.resultat) behandle(k.home, k.away, k);
+  for (const k of SLUTTSPILL) if (k.resultat && k.homeTeam && k.awayTeam) behandle(k.homeTeam, k.awayTeam, k);
+  return per;
+}
+
+function temaerPerDeltaker() {
+  const agg = temaAggregat();
+  const verdi = (lag, felt) => (agg[lag] && agg[lag][felt]) || 0;
+  const result = Object.fromEntries(DELTAKERE.map((d) => [d.navn, []]));
+  for (const tema of TEMAER) {
+    let maks = 0;
+    for (const d of DELTAKERE) maks = Math.max(maks, verdi(d.lag, tema.felt));
+    if (maks < 1) continue;
+    for (const d of DELTAKERE) {
+      if (verdi(d.lag, tema.felt) === maks) result[d.navn].push({ ...tema, verdi: maks });
+    }
+  }
+  return result;
+}
+
+function oddsTekst(lag) {
+  const o = ODDS[lag];
+  if (o == null || isNaN(Number(o))) return "–";
+  return Number(o).toLocaleString("nb-NO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 /* ---------- Scoreboard ---------- */
 function byggScoreboard() {
+  const temaMap = temaerPerDeltaker();
   const rader = medRangering(
     DELTAKERE.map((d) => {
       const stats = statsForLag(d.lag);
@@ -158,17 +215,35 @@ function byggScoreboard() {
       : neste
         ? `Neste: ${neste.home ?? "?"} – ${neste.away ?? "?"} · ${norskTid(neste.utc)}`
         : "Ingen kamper igjen";
+    const temaer = temaMap[r.navn] || [];
+    const radTema = temaer.length ? ` tema tema-${temaer[0].key}` : "";
+    const chips = temaer.map((t) =>
+      `<span class="tema-chip tc-${t.key}" title="${t.navn}: ${t.tekst} (${t.verdi})">${t.emoji} ${t.navn}</span>`).join("");
     return `
-      <div class="score-row ${r.ute ? "eliminated" : ""}" data-deltaker="${r.navn}" style="animation-delay:${i * 0.06}s">
+      <div class="score-row${radTema} ${r.ute ? "eliminated" : ""}" data-deltaker="${r.navn}" style="animation-delay:${i * 0.06}s">
+        <div class="s-odds" title="Odds for at ${r.lag} vinner VM${ODDS_META.kilde ? ` · kilde: ${ODDS_META.kilde}` : ""}">
+          <span class="s-odds-label">🏆 VM-odds</span>
+          <span class="s-odds-val">${oddsTekst(r.lag)}</span>
+        </div>
         <div class="rank ${r.rang <= 3 ? `r${r.rang}` : ""}">${r.rang}</div>
         <div class="s-who">
           <span class="s-flag">${flagg(r.lag)}</span>
-          <span class="s-name">${r.navn} <span class="s-country">(${r.lag})</span></span>
+          <div class="s-namecol">
+            <span class="s-name">${r.navn} <span class="s-country">(${r.lag})</span></span>
+            ${chips ? `<span class="s-temaer">${chips}</span>` : ""}
+          </div>
         </div>
         <div class="s-stats">${r.spilt} kamper · ${r.seire}S ${r.uavgjort}U ${r.tap}T · ⚽ ${r.maal} mål<br>${nesteTekst}</div>
         <div class="s-points">${r.poeng}<small> poeng</small></div>
       </div>`;
   }).join("");
+
+  const oddsNote = document.getElementById("oddsNote");
+  if (oddsNote) {
+    oddsNote.textContent = ODDS_META.kilde
+      ? `VM-odds (desimal) for at laget vinner hele turneringen. Kilde: ${ODDS_META.kilde}${ODDS_META.oppdatert ? ` · oppdatert ${norskTid(ODDS_META.oppdatert)}` : ""}.`
+      : "";
+  }
 
   // Klikk på rad eller pallplass → deltakerside
   document.querySelectorAll("[data-deltaker]").forEach((el) => {
@@ -608,6 +683,8 @@ async function lastData() {
         DELTAKERE.length = 0;
         DELTAKERE.push(...lagret.deltakere);
       }
+      ODDS = lagret.odds && typeof lagret.odds === "object" ? lagret.odds : {};
+      ODDS_META = lagret.oddsMeta && typeof lagret.oddsMeta === "object" ? lagret.oddsMeta : {};
       if (lagret.resultater) {
         for (const k of KAMPER) {
           const o = lagret.resultater[k.id] || {};

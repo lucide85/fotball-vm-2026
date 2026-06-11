@@ -46,6 +46,9 @@ def les_config():
 # ---------- AI-oppdatering av resultater ----------
 AI_MODELL = "claude-sonnet-4-6"
 
+# Fast kilde for VM-vinnerodds gjennom hele turneringen.
+ODDS_KILDE = "Oddschecker (oddschecker.com)"
+
 AI_SCHEMA = {
     "type": "object",
     "properties": {
@@ -87,9 +90,23 @@ AI_SCHEMA = {
                              "penaltyWinner", "homeTeam", "awayTeam", "stats", "kilde"],
                 "additionalProperties": False,
             },
-        }
+        },
+        "odds": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "lag": {"type": "string"},
+                    "funnet": {"type": "boolean"},
+                    "desimal": {"anyOf": [{"type": "number"}, {"type": "null"}]},
+                    "kilde": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                },
+                "required": ["lag", "funnet", "desimal", "kilde"],
+                "additionalProperties": False,
+            },
+        },
     },
-    "required": ["kamper"],
+    "required": ["kamper", "odds"],
     "additionalProperties": False,
     "$defs": {
         "lagstat": {
@@ -125,14 +142,32 @@ Rules:
 Matches to research:
 """
 
+AI_ODDS_INSTRUKS = (
+    "\n\nIn addition to the matches, return the current outright winner odds for the FIFA "
+    "World Cup 2026 ('to win the tournament' / outright market) for the teams listed below.\n"
+    "- Use {kilde} as the consistent source throughout the tournament (the aggregated best "
+    "decimal odds shown there for the outright winner market).\n"
+    "- 'desimal': the decimal odds as a number (e.g. 5.5, 12.0, 26.0).\n"
+    "- Set 'funnet': false and 'desimal': null for any team where you cannot find a reliable "
+    "figure (e.g. teams already eliminated may be removed from the market).\n"
+    "- Use the exact Norwegian team names given here. Return one entry per team.\n"
+    "Teams for odds:\n"
+)
 
-def ai_forslag(kamper, api_key):
-    """Spør Claude (med websøk) om resultater for kampene. Returnerer dict."""
+
+def ai_forslag(kamper, lag, api_key):
+    """Spør Claude (med websøk) om resultater + VM-odds. Returnerer dict."""
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)
     kampliste = json.dumps(kamper, ensure_ascii=False, indent=1)
-    messages = [{"role": "user", "content": AI_INSTRUKS + kampliste}]
+    odds_del = ""
+    if lag:
+        odds_del = AI_ODDS_INSTRUKS.format(kilde=ODDS_KILDE) + json.dumps(
+            sorted(set(lag)), ensure_ascii=False
+        )
+    prompt = AI_INSTRUKS + kampliste + odds_del
+    messages = [{"role": "user", "content": prompt}]
 
     while True:
         response = client.messages.create(
@@ -146,7 +181,7 @@ def ai_forslag(kamper, api_key):
         if response.stop_reason == "pause_turn":
             # Serverside websøk-løkke trenger flere runder - fortsett der den slapp
             messages = [
-                {"role": "user", "content": AI_INSTRUKS + kampliste},
+                {"role": "user", "content": prompt},
                 {"role": "assistant", "content": response.content},
             ]
             continue
@@ -246,9 +281,13 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json(401, {"error": "Ikke innlogget"})
                 return
             body = self._les_body()
-            kamper = (body or {}).get("kamper")
-            if not isinstance(kamper, list) or not kamper:
-                self._json(400, {"error": "Ingen kamper å undersøke"})
+            kamper = (body or {}).get("kamper") or []
+            lag = (body or {}).get("lag") or []
+            if not isinstance(kamper, list) or not isinstance(lag, list):
+                self._json(400, {"error": "Ugyldig forespørsel"})
+                return
+            if not kamper and not lag:
+                self._json(400, {"error": "Ingenting å undersøke"})
                 return
             cfg = les_config()
             api_key = cfg.get("anthropic_api_key") or os.environ.get("ANTHROPIC_API_KEY")
@@ -261,7 +300,7 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json(503, {"error": "Python-pakken 'anthropic' mangler på serveren. Kjør: pip install anthropic"})
                 return
             try:
-                forslag = ai_forslag(kamper[:15], api_key)
+                forslag = ai_forslag(kamper[:15], lag[:48], api_key)
                 self._json(200, forslag)
             except Exception as e:  # API-feil, nettverk, JSON-parsing
                 self._json(502, {"error": f"AI-forespørselen feilet: {e}"})
