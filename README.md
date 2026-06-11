@@ -48,10 +48,12 @@ I adminpanelet kan du:
 
 - **Kampstatistikk**: per kamp og lag — gule kort, røde kort, hjørnespark,
   straffespark i ordinær tid og selvmål (under «📊 Kampstatistikk»)
-- **🤖 Hent resultater med AI**: Claude (Sonnet) søker på nettet etter resultater
-  og statistikk for spilte kamper som mangler data, og henter samtidig oppdaterte
-  **VM-vinnerodds** for deltakernes lag fra en fast kilde (Oddschecker). Alle forslag
-  vises til godkjenning — først når du godkjenner, lagres de i databasen.
+- **🤖 Hent resultater med AI**: Claude (Sonnet) søker på nettet etter resultat
+  og statistikk for **nye, ferdigspilte kamper som ennå ikke er registrert**
+  (kamper som allerede har et resultat rører den ikke — der retter du manuelt),
+  og henter samtidig oppdaterte **VM-vinnerodds** for deltakernes lag fra en fast
+  kilde (Oddschecker) hver gang. Alle forslag vises til godkjenning — først når du
+  godkjenner, lagres de i databasen.
   Krever en Anthropic API-nøkkel i `config.json` (`"anthropic_api_key"`) eller
   miljøvariabelen `ANTHROPIC_API_KEY`, samt `pip install anthropic` på serveren.
 

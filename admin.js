@@ -264,18 +264,19 @@ let aiForslag = null;
 let aiOdds = null;
 
 function aiKandidater() {
-  // Kamper som har startet (avspark + 2,5 t passert) og mangler resultat eller statistikk
+  // Kun nye, ferdigspilte kamper som ennå IKKE er registrert (mangler resultat).
+  // Kamper som allerede har et resultat rører ikke AI-en – der retter admin manuelt.
   const naa = Date.now();
   const ferdig = (utc) => new Date(utc).getTime() + 2.5 * 3600 * 1000 < naa;
   const kandidater = [];
   for (const k of KAMPER) {
     if (!ferdig(k.utc)) continue;
-    if (k.resultat && k.stats) continue;
+    if (k.resultat) continue;
     kandidater.push({ id: k.id, stage: `Gruppe ${k.gruppe}`, home: k.home, away: k.away, utc: k.utc, teamsKnown: true });
   }
   for (const k of SLUTTSPILL) {
     if (!ferdig(k.utc)) continue;
-    if (k.resultat && k.stats && k.homeTeam && k.awayTeam) continue;
+    if (k.resultat) continue;
     kandidater.push({
       id: k.id,
       stage: RUNDE_KORT[k.runde],
