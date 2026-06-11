@@ -142,39 +142,34 @@ Rules:
 Matches to research:
 """
 
-AI_ODDS_INSTRUKS = (
-    "\n\nIn addition to the matches, return the current outright winner odds for the FIFA "
-    "World Cup 2026 ('to win the tournament' / outright market) for the teams listed below.\n"
+AI_ODDS_PROMPT = (
+    "You are updating a results database for the FIFA World Cup 2026 (USA/Canada/Mexico).\n"
+    "Use web search to find the current outright winner odds ('to win the tournament' / "
+    "outright market) for the FIFA World Cup 2026 for each team listed below.\n"
     "- Use {kilde} as the consistent source throughout the tournament (the aggregated best "
     "decimal odds shown there for the outright winner market).\n"
     "- 'desimal': the decimal odds as a number (e.g. 5.5, 12.0, 26.0).\n"
     "- Set 'funnet': false and 'desimal': null for any team where you cannot find a reliable "
     "figure (e.g. teams already eliminated may be removed from the market).\n"
-    "- Use the exact Norwegian team names given here. Return one entry per team.\n"
-    "Teams for odds:\n"
+    "- Use the exact Norwegian team names given. Return one entry per team in 'odds'.\n"
+    "- Return 'kamper' as an empty array [].\n\nTeams:\n"
 )
 
+# Jobben deles i små biter og websøk begrenses for å holde oss innenfor API-ens
+# rate limit (input-tokens/min på lave tiers). SDK-en venter og prøver automatisk
+# på nytt ved 429 (respekterer Retry-After-headeren).
+AI_KAMP_BOLK = 4  # kamper per modellkall
 
-def ai_forslag(kamper, lag, api_key):
-    """Spør Claude (med websøk) om resultater + VM-odds. Returnerer dict."""
-    import anthropic
 
-    client = anthropic.Anthropic(api_key=api_key)
-    kampliste = json.dumps(kamper, ensure_ascii=False, indent=1)
-    odds_del = ""
-    if lag:
-        odds_del = AI_ODDS_INSTRUKS.format(kilde=ODDS_KILDE) + json.dumps(
-            sorted(set(lag)), ensure_ascii=False
-        )
-    prompt = AI_INSTRUKS + kampliste + odds_del
+def _modell_kall(client, prompt, max_uses):
+    """Ett kall til modellen med serverside websøk (håndterer pause_turn)."""
     messages = [{"role": "user", "content": prompt}]
-
     while True:
         response = client.messages.create(
             model=AI_MODELL,
-            max_tokens=16000,
+            max_tokens=8000,
             thinking={"type": "adaptive"},
-            tools=[{"type": "web_search_20260209", "name": "web_search"}],
+            tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": max_uses}],
             output_config={"format": {"type": "json_schema", "schema": AI_SCHEMA}},
             messages=messages,
         )
@@ -186,11 +181,33 @@ def ai_forslag(kamper, lag, api_key):
             ]
             continue
         break
-
     tekst = next((b.text for b in response.content if b.type == "text"), None)
     if not tekst:
         raise RuntimeError(f"Tomt svar fra modellen (stop_reason={response.stop_reason})")
     return json.loads(tekst)
+
+
+def ai_forslag(kamper, lag, api_key):
+    """Spør Claude (med websøk) om resultater + VM-odds. Returnerer dict."""
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=api_key, max_retries=6, timeout=600.0)
+
+    alle_kamper = []
+    for i in range(0, len(kamper), AI_KAMP_BOLK):
+        bolk = kamper[i:i + AI_KAMP_BOLK]
+        prompt = AI_INSTRUKS + json.dumps(bolk, ensure_ascii=False, indent=1)
+        res = _modell_kall(client, prompt, max_uses=2 * len(bolk) + 1)
+        alle_kamper.extend(res.get("kamper", []))
+
+    odds = []
+    if lag:
+        unike = sorted(set(lag))
+        prompt = AI_ODDS_PROMPT.format(kilde=ODDS_KILDE) + json.dumps(unike, ensure_ascii=False)
+        res = _modell_kall(client, prompt, max_uses=min(12, len(unike) + 2))
+        odds = res.get("odds", [])
+
+    return {"kamper": alle_kamper, "odds": odds}
 
 
 def gyldig_token(header):
@@ -300,7 +317,7 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json(503, {"error": "Python-pakken 'anthropic' mangler på serveren. Kjør: pip install anthropic"})
                 return
             try:
-                forslag = ai_forslag(kamper[:15], lag[:48], api_key)
+                forslag = ai_forslag(kamper[:8], lag[:48], api_key)
                 self._json(200, forslag)
             except Exception as e:  # API-feil, nettverk, JSON-parsing
                 self._json(502, {"error": f"AI-forespørselen feilet: {e}"})
