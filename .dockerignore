@@ -1,0 +1,11 @@
+# Hemmeligheter og kjøretidsdata skal aldri inn i imaget – de mountes via /data
+data/
+config.json
+data.json
+
+.git/
+.claude/
+__pycache__/
+*.pyc
+README.md
+deploy/

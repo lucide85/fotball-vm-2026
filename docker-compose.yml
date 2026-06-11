@@ -1,0 +1,22 @@
+# Kjøres på app-VM-en (ikke Traefik-VM-en).
+# Traefik står på en annen VM og ruter over nettverket til http://<APP_VM_IP>:8123.
+services:
+  fotballvm:
+    build: .
+    image: fotballvm2026:latest
+    container_name: fotballvm2026
+    restart: unless-stopped
+    ports:
+      # Eksponer porten på app-VM-en slik at Traefik-VM-en når den.
+      # Vil du kun slippe inn Traefik, bind til LAN-IP-en: "192.168.x.y:8123:8123"
+      - "8123:8123"
+    volumes:
+      # config.json (brukernavn/passord + Anthropic-nøkkel) og data.json
+      # (deltakere/resultater) bor her og overlever omstart/oppdatering.
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8123/api/data').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="nb">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vitec Plania · Fotball-VM 2026</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
+</head>
+<body>
+
+  <!-- Dynamisk bakgrunn -->
+  <div class="bg">
+    <div class="sun"></div>
+    <div class="cloud cloud-1">☁️</div>
+    <div class="cloud cloud-2">☁️</div>
+    <div class="cloud cloud-3">☁️</div>
+    <div class="floaty f1">⚽</div>
+    <div class="floaty f2">🏆</div>
+    <div class="floaty f3">⚽</div>
+    <div class="floaty f4">🌴</div>
+    <div class="floaty f5">🕶️</div>
+    <div class="wave"></div>
+  </div>
+
+  <header class="hero">
+    <div class="hero-badge">Vitec Plania</div>
+    <h1>⚽ Fotball-VM <span class="year">2026</span></h1>
+    <p class="hero-sub">USA · Canada · Mexico &nbsp;|&nbsp; 11. juni – 19. juli</p>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-view="scoreboard" role="tab">🏆 Scoreboard</button>
+      <button class="tab" data-view="resultater" role="tab">📅 Resultater &amp; kamper</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- SCOREBOARD -->
+    <section id="view-scoreboard" class="view active">
+      <div class="podium" id="podium"></div>
+      <div class="scoreboard" id="scoreboard"></div>
+      <div class="rules-card">
+        <h3>Slik funker det</h3>
+        <p>Hver deltaker følger sitt lag gjennom hele VM.
+           <strong>Seier = 3 poeng</strong> · <strong>Uavgjort = 1 poeng</strong> · Tap = 0 poeng.
+           Poengene telles i alle kamper laget spiller, fra gruppespill til finale. Lykke til! ☀️</p>
+      </div>
+    </section>
+
+    <!-- RESULTATER -->
+    <section id="view-resultater" class="view">
+      <div class="view-toggle" id="viewToggle">
+        <button class="toggle-btn active" data-mode="grupper">🔠 Gruppevis</button>
+        <button class="toggle-btn" data-mode="kronologisk">⏱️ Kronologisk</button>
+      </div>
+
+      <div id="mode-grupper">
+        <h2 class="section-title">🗓️ Gruppespill <span class="section-hint">(tider i norsk tid)</span></h2>
+        <div class="groups" id="groups"></div>
+
+        <h2 class="section-title">🏟️ Sluttspill</h2>
+        <div class="bracket-scroll">
+          <div class="bracket" id="bracket"></div>
+        </div>
+        <div class="finale-row" id="finaleRow"></div>
+      </div>
+
+      <div id="mode-kronologisk" hidden>
+        <h2 class="section-title">⏱️ Alle kamper i kronologisk rekkefølge <span class="section-hint">(tider i norsk tid)</span></h2>
+        <div id="chrono"></div>
+      </div>
+    </section>
+
+    <!-- DELTAKER-DETALJER -->
+    <section id="view-deltaker" class="view">
+      <button class="back-btn" id="backBtn">← Tilbake til scoreboard</button>
+      <div id="deltakerDetalj"></div>
+    </section>
+
+    <!-- ADMINISTRASJON -->
+    <section id="view-admin" class="view">
+      <div class="admin-top">
+        <h2 class="section-title">⚙️ Administrasjon</h2>
+        <div class="admin-actions">
+          <button id="aiBtn" class="save-btn ai-btn">🤖 Hent resultater med AI</button>
+          <button id="lagreBtn" class="save-btn">💾 Lagre endringer</button>
+          <button id="loggUtBtn" class="back-btn">Logg ut</button>
+        </div>
+      </div>
+      <div id="lagreStatus" class="lagre-status" hidden></div>
+      <div id="aiPanel" class="ai-panel" hidden></div>
+
+      <h3 class="d-section">👥 Deltakere</h3>
+      <div id="adminDeltakere" class="admin-liste"></div>
+      <button id="leggTilDeltaker" class="add-btn">+ Legg til deltaker</button>
+
+      <h3 class="d-section">🗓️ Gruppespill <span class="section-hint">(stilling etter fulltid)</span></h3>
+      <div id="adminGruppespill" class="admin-liste"></div>
+
+      <h3 class="d-section">🏟️ Sluttspill</h3>
+      <p class="admin-hint">Velg lagene når de er klare. Fyll inn stilling etter fulltid, eventuelt stilling
+         etter ekstraomganger, og hvem som gikk videre hvis det ble straffekonkurranse.</p>
+      <div id="adminSluttspill" class="admin-liste"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>Vitec Plania VM-konkurranse 2026 · Heia! 🎉</span>
+    <button class="admin-link" id="adminLink" title="Administrasjon" aria-label="Administrasjon">⚙️</button>
+    <form id="loginForm" class="login-form" hidden>
+      <input type="text" id="loginUser" placeholder="Brukernavn" autocomplete="username" required>
+      <input type="password" id="loginPass" placeholder="Passord" autocomplete="current-password" required>
+      <button type="submit" class="save-btn">Logg inn</button>
+      <span id="loginFeil" class="login-feil"></span>
+    </form>
+  </footer>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

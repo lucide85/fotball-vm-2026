@@ -1,0 +1,14 @@
+# Hemmeligheter (brukernavn/passord + Anthropic API-nøkkel) – aldri til GitHub
+config.json
+data/config.json
+
+# Kjøretidsdata (deltakere/resultater) – lokal/serverspesifikk tilstand
+data.json
+data/data.json
+data/
+
+# Diverse
+.claude/
+__pycache__/
+*.pyc
+.DS_Store
