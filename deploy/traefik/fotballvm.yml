@@ -4,9 +4,7 @@
 # (typisk /etc/traefik/dynamic/). Traefik plukker den opp automatisk – ingen
 # omstart nødvendig hvis file provider kjører med "watch: true".
 #
-# Bytt før bruk:
-#   vm2026.vikane.cloud → domenet du vil bruke
-#   192.168.1.50        → IP-en til app-VM-en (der docker compose kjører)
+# Domene vm26.vikane.cloud, app-VM 192.168.1.25:8123 (samme VM som run-appen).
 #
 # Sjekk at disse to stemmer med DIN Traefik (statisk config):
 #   websecure    → navnet på din HTTPS-entrypoint (port 443)
@@ -16,7 +14,7 @@
 http:
   routers:
     fotballvm:
-      rule: "Host(`vm2026.vikane.cloud`)"
+      rule: "Host(`vm26.vikane.cloud`)"
       entryPoints:
         - websecure
       service: fotballvm-svc
@@ -28,4 +26,4 @@ http:
       loadBalancer:
         passHostHeader: true
         servers:
-          - url: "http://192.168.1.50:8123"
+          - url: "http://192.168.1.25:8123"
